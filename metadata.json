@@ -1,5 +1,5 @@
 {
   "name": "WorkTrack",
-  "description": "A reliable work hours tracker with overtime calculations, persistent storage, and dark mode support.",
+  "description": "A reliable work hours tracker with overtime calculations, persistent storage, and night vision support.",
   "requestFramePermissions": []
 }
