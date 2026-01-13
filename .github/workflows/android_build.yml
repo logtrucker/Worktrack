@@ -23,15 +23,16 @@ jobs:
       with:
         gradle-version: '8.5'
 
-    - name: Initialize Gradle Project (if missing)
-      # This ensures the environment is ready even if files were forgotten
+       - name: Initialize Gradle Project (if missing)
       run: |
         if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
           echo "No Gradle build file found. Initializing..."
-          gradle init --type java-application --dsl groovy --projectName Worktrack --package worktrack.app
+          # Note the change to --project-name (hyphenated)
+          gradle init --type java-application --dsl groovy --project-name Worktrack --package worktrack.app --no-daemon
         else
           echo "Gradle build file exists. Skipping initialization."
         fi
+
 
     - name: Generate Wrapper
       run: gradle wrapper
