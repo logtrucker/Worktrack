@@ -21,11 +21,10 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }}
-      - name: Build Debug APK
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }
       - name: generate Gradle wrapper
         run: gradle wrapper
-      - name: Gradle assemble
+      - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
