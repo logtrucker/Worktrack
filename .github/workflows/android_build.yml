@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Android Build & Auto-Wrapper
 
 on:
   push:
@@ -19,18 +19,28 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'gradle'
 
+    # 1. Install a standalone Gradle to generate the wrapper
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.5' # You can change this to your preferred version
+
+    # 2. Generate the wrapper if it's missing
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper
+
+    # 3. Fix permissions for the newly generated script
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    # 4. Compile the APK
     - name: Build with Gradle
-      # 'assembleDebug' builds the debug APK. 
-      # Use 'assembleRelease' for production builds.
       run: ./gradlew assembleDebug
 
+    # 5. Save the output
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
+        name: worktrack-debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
