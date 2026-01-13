@@ -1,28 +1,3 @@
-name: Android Build & Auto-Repair
-
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
       - name: Initialize and Fix Android Structure
         run: |
           if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
@@ -30,25 +5,13 @@ jobs:
             
             gradle init --type java-application --dsl groovy --project-name Worktrack --package worktrack.app --no-daemon
             
-            # 1. Update app/build.gradle with a versioned plugin and repositories
-            printf "plugins {\n    id 'com.android.application' version '8.2.0'\n}\n\nrepositories {\n    google()\n    mavenCentral()\n}\n\nandroid {\n    namespace 'worktrack.app'\n    compileSdk 34\n    defaultConfig {\n        applicationId \"worktrack.app\"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName \"1.0\"\n    }\n}\n" > app/build.gradle
+            # 1. Update app/build.gradle (Removed redundant repositories and fixed compileSdk)
+            printf "plugins {\n    id 'com.android.application' version '8.2.0'\n}\n\nandroid {\n    namespace 'worktrack.app'\n    compileSdk 34\n\n    defaultConfig {\n        applicationId \"worktrack.app\"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName \"1.0\"\n    }\n}\n" > app/build.gradle
 
-            # 2. Update settings.gradle to ensure it uses the Google repo for plugins
+            # 2. Update settings.gradle (This is the 'Source of Truth' for repositories)
             printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
 
             # 3. Create a minimal Android Manifest
             mkdir -p app/src/main
             printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:label=\"Worktrack\">\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
           fi
-
-      - name: Generate Wrapper and Build APK
-        run: |
-          gradle wrapper
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload Resulting APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Worktrack-Package
-          path: "**/build/outputs/apk/debug/*.apk"
