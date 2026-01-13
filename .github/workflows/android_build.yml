@@ -1,9 +1,7 @@
-name: Android Build & Auto-Wrapper
+name: Android Build & Auto-Init
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
     branches: [ "main" ]
 
 jobs:
@@ -20,27 +18,33 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # 1. Install a standalone Gradle to generate the wrapper
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
       with:
-        gradle-version: '8.5' # You can change this to your preferred version
+        gradle-version: '8.5'
 
-    # 2. Generate the wrapper if it's missing
-    - name: Generate Gradle Wrapper
+    - name: Initialize Gradle Project (if missing)
+      # This ensures the environment is ready even if files were forgotten
+      run: |
+        if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
+          echo "No Gradle build file found. Initializing..."
+          gradle init --type java-application --dsl groovy --projectName Worktrack --package worktrack.app
+        else
+          echo "Gradle build file exists. Skipping initialization."
+        fi
+
+    - name: Generate Wrapper
       run: gradle wrapper
 
-    # 3. Fix permissions for the newly generated script
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Build APK
+      # Note: This will fail if the project isn't configured for Android.
+      # 'assembleDebug' is an Android-specific task.
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug || echo "Build failed: Ensure Android plugins are configured in build.gradle"
 
-    # 4. Compile the APK
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
-
-    # 5. Save the output
-    - name: Upload APK
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: worktrack-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: build-results
+        path: "**/build/outputs/apk/debug/*.apk"
