@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Web Dependencies & Build
+      - name: Install & Build Web App
         run: |
           if [ -f package.json ]; then
             npm install
@@ -34,40 +34,36 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Initialize and Fix Android Structure
+      - name: Initialize Android Structure
         run: |
           if [ ! -f build.gradle ]; then
             gradle init --type java-application --dsl groovy --project-name Worktrack --package worktrack.app --no-daemon
             
-            # Configure Build.gradle
+            # 1. App-level build.gradle
             printf "plugins {\n    id 'com.android.application' version '8.2.0'\n}\n\nandroid {\n    namespace 'worktrack.app'\n    compileSdk 34\n    defaultConfig {\n        applicationId \"worktrack.app\"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName \"1.0\"\n    }\n}\n" > app/build.gradle
 
-            # Configure Settings.gradle
-            printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
+            # 2. Settings.gradle
+            printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
 
-            # Create WebView MainActivity with DOM Storage enabled
+            # 3. MainActivity.java (Critical fixes for React)
             mkdir -p app/src/main/java/worktrack/app
-            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.WebSettings;\nimport android.webkit.WebView;\nimport android.webkit.WebViewClient;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings webSettings = webView.getSettings();\n        webSettings.setJavaScriptEnabled(true);\n        webSettings.setDomStorageEnabled(true);\n        webSettings.setDatabaseEnabled(true);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
+            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.WebSettings;\nimport android.webkit.WebView;\nimport android.webkit.WebViewClient;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings s = webView.getSettings();\n        s.setJavaScriptEnabled(true);\n        s.setDomStorageEnabled(true);\n        s.setAllowFileAccess(true);\n        s.setAllowContentAccess(true);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
 
-            # Create Android Manifest
+            # 4. Android Manifest
             mkdir -p app/src/main
             printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"Worktrack\" android:hasCode=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\" android:configChanges=\"orientation|screenSize\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
           fi
 
-      - name: Force Inject Assets
+      - name: Inject Built Assets
         run: |
-          # Create the folder that doesn't exist yet
           mkdir -p app/src/main/assets
+          # Copies compiled JS from Vite (dist) or React (build)
+          if [ -d dist ]; then cp -r dist/* app/src/main/assets/; fi
+          if [ -d build ]; then cp -r build/* app/src/main/assets/; fi
+          # Fallback for root html/json files
+          cp *.html *.json app/src/main/assets/ 2>/dev/null || true
           
-          # Priority 1: Compiled files (dist/build)
-          if [ -d dist ]; then cp -rn dist/* app/src/main/assets/ || true; fi
-          if [ -d build ]; then cp -rn build/* app/src/main/assets/ || true; fi
-          
-          # Priority 2: Root files (index.html, .js, .json)
-          # We use -n to not overwrite the compiled version if it already exists
-          cp -n *.html *.js *.css *.json app/src/main/assets/ 2>/dev/null || true
-          
-          echo "Listing final assets for verification:"
+          echo "Current Asset Structure:"
           ls -R app/src/main/assets/
 
       - name: Build APK
@@ -76,8 +72,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Resulting APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Worktrack-Package
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: "**/*.apk"
