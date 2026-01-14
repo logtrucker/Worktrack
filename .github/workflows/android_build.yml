@@ -12,11 +12,12 @@ jobs:
         uses: actions/checkout@v4
 
       # STEP 1: Node.js Setup & Web Build
-      - name: Set up Node.js
+      -      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # Removed the 'cache: npm' line to bypass    the lock file requirement
+
 
       - name: Install Web Dependencies & Build
         run: |
