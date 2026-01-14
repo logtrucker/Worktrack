@@ -20,8 +20,8 @@ jobs:
         run: |
           if [ -f package.json ]; then
             npm install
-            # Force Vite to build with relative paths for Android
-            npx vite build --base ./ || npm run build -- --base ./ || npm run build
+            # Forcing relative paths for mobile filesystem compatibility
+            npm run build -- --base ./ || npx vite build --base ./ || npm run build
           fi
 
       - name: Set up JDK 17
@@ -40,37 +40,32 @@ jobs:
           if [ ! -f build.gradle ]; then
             gradle init --type java-application --dsl groovy --project-name Worktrack --package worktrack.app --no-daemon
             
-            # App-level build.gradle
+            # 1. App-level build.gradle
             printf "plugins {\n    id 'com.android.application' version '8.2.0'\n}\n\nandroid {\n    namespace 'worktrack.app'\n    compileSdk 34\n    defaultConfig {\n        applicationId \"worktrack.app\"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName \"1.0\"\n    }\n}\n" > app/build.gradle
 
-            # Settings.gradle
+            # 2. Settings.gradle
             printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
 
-            # MainActivity.java (Enhanced for local file loading)
+            # 3. MainActivity.java (The Mobile Debugger version)
             mkdir -p app/src/main/java/worktrack/app
-            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.*;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings s = webView.getSettings();\n        s.setJavaScriptEnabled(true);\n        s.setDomStorageEnabled(true);\n        s.setAllowFileAccess(true);\n        s.setAllowContentAccess(true);\n        s.setMediaPlaybackRequiresUserGesture(false);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
+            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.*;\nimport android.widget.Toast;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings s = webView.getSettings();\n        s.setJavaScriptEnabled(true);\n        s.setDomStorageEnabled(true);\n        s.setAllowFileAccess(true);\n        s.setAllowContentAccess(true);\n        \n        webView.setWebChromeClient(new WebChromeClient() {\n            @Override\n            public boolean onConsoleMessage(ConsoleMessage cm) {\n                if (cm.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {\n                    Toast.makeText(MainActivity.this, \"JS ERROR: \" + cm.message(), Toast.LENGTH_LONG).show();\n                }\n                return true;\n            }\n        });\n\n        webView.setWebViewClient(new WebViewClient() {\n            @Override\n            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {\n                Toast.makeText(MainActivity.this, \"LOAD ERROR: \" + err.getDescription(), Toast.LENGTH_LONG).show();\n            }\n        });\n\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
 
-            # Android Manifest
+            # 4. Android Manifest (Full Screen Theme)
             mkdir -p app/src/main
-            printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"Worktrack\" android:hasCode=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\" android:configChanges=\"orientation|screenSize\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
+            printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"Worktrack\" android:hasCode=\"true\" android:theme=\"@android:style/Theme.NoTitleBar.Fullscreen\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\" android:configChanges=\"orientation|screenSize\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
           fi
 
-      - name: Inject Built Assets
+      - name: Inject and Patch Assets
         run: |
           mkdir -p app/src/main/assets
+          if [ -d dist ]; then cp -r dist/* app/src/main/assets/; fi
+          if [ -d build ]; then cp -r build/* app/src/main/assets/; fi
           
-          # Move ONLY the compiled results into assets
-          # This replaces the uncompiled index.html with the compiled one
-          if [ -d dist ]; then 
-            cp -r dist/* app/src/main/assets/
-          elif [ -d build ]; then 
-            cp -r build/* app/src/main/assets/
-          else
-            # Fallback if build failed
-            cp *.html *.js *.css *.json app/src/main/assets/ 2>/dev/null || true
-          fi
+          # Clean absolute paths in HTML to ensure mobile filesystem can read them
+          sed -i 's/src="\//src="/g' app/src/main/assets/index.html
+          sed -i 's/href="\//href="/g' app/src/main/assets/index.html
           
-          echo "Verifying Assets Folder:"
+          echo "Final Assets List:"
           ls -R app/src/main/assets/
 
       - name: Build APK
