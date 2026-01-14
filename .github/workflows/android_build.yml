@@ -20,8 +20,8 @@ jobs:
         run: |
           if [ -f package.json ]; then
             npm install
-            # This creates the 'dist' folder with compiled .js files
-            npm run build --if-present
+            # Force Vite to build with relative paths for Android
+            npx vite build --base ./ || npm run build -- --base ./ || npm run build
           fi
 
       - name: Set up JDK 17
@@ -46,27 +46,29 @@ jobs:
             # Settings.gradle
             printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
 
-            # MainActivity.java (Permissive WebView)
+            # MainActivity.java (Enhanced for local file loading)
             mkdir -p app/src/main/java/worktrack/app
-            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.*;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings s = webView.getSettings();\n        s.setJavaScriptEnabled(true);\n        s.setDomStorageEnabled(true);\n        s.setAllowFileAccess(true);\n        s.setAllowContentAccess(true);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
+            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.*;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings s = webView.getSettings();\n        s.setJavaScriptEnabled(true);\n        s.setDomStorageEnabled(true);\n        s.setAllowFileAccess(true);\n        s.setAllowContentAccess(true);\n        s.setMediaPlaybackRequiresUserGesture(false);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
 
             # Android Manifest
             mkdir -p app/src/main
             printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"Worktrack\" android:hasCode=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\" android:configChanges=\"orientation|screenSize\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
           fi
 
-      - name: Inject and Patch Assets
+      - name: Inject Built Assets
         run: |
           mkdir -p app/src/main/assets
           
-          # Move compiled files into assets
-          if [ -d dist ]; then cp -r dist/* app/src/main/assets/; fi
-          if [ -d build ]; then cp -r build/* app/src/main/assets/; fi
-          
-          # Patch the HTML to fix the path from "/src/index.tsx" to the compiled version
-          # This specifically handles the absolute path issue you have
-          sed -i 's/src="\//src="/g' app/src/main/assets/index.html
-          sed -i 's/href="\//href="/g' app/src/main/assets/index.html
+          # Move ONLY the compiled results into assets
+          # This replaces the uncompiled index.html with the compiled one
+          if [ -d dist ]; then 
+            cp -r dist/* app/src/main/assets/
+          elif [ -d build ]; then 
+            cp -r build/* app/src/main/assets/
+          else
+            # Fallback if build failed
+            cp *.html *.js *.css *.json app/src/main/assets/ 2>/dev/null || true
+          fi
           
           echo "Verifying Assets Folder:"
           ls -R app/src/main/assets/
