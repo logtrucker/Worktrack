@@ -11,6 +11,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # STEP 1: Node.js Setup & Web Build
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Web Dependencies & Build
+        run: |
+          npm install
+          # This command usually creates a 'dist' or 'build' folder
+          npm run build 
+
+      # STEP 2: Android Environment Setup
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -22,11 +36,11 @@ jobs:
         with:
           gradle-version: '8.5'
 
+      # STEP 3: Self-Healing Android Structure
       - name: Initialize and Fix Android Structure
         run: |
           if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
-            echo "Empty project detected. Generating Android structure..."
-            
+            echo "Initializing Android project..."
             gradle init --type java-application --dsl groovy --project-name Worktrack --package worktrack.app --no-daemon
             
             # Configure Build.gradle
@@ -35,15 +49,23 @@ jobs:
             # Configure Settings.gradle
             printf "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = 'Worktrack'\ninclude ':app'\n" > settings.gradle
 
-            # Create Java MainActivity
+            # Create WebView MainActivity
             mkdir -p app/src/main/java/worktrack/app
-            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.widget.TextView;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        TextView tv = new TextView(this);\n        tv.setText(\"Worktrack is Running!\");\n        setContentView(tv);\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
+            printf "package worktrack.app;\nimport android.app.Activity;\nimport android.os.Bundle;\nimport android.webkit.WebSettings;\nimport android.webkit.WebView;\nimport android.webkit.WebViewClient;\n\npublic class MainActivity extends Activity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WebView webView = new WebView(this);\n        WebSettings webSettings = webView.getSettings();\n        webSettings.setJavaScriptEnabled(true);\n        webView.setWebViewClient(new WebViewClient());\n        setContentView(webView);\n        webView.loadUrl(\"file:///android_asset/index.html\");\n    }\n}\n" > app/src/main/java/worktrack/app/MainActivity.java
 
-            # Create Android Manifest with Launcher
+            # Create Android Manifest
             mkdir -p app/src/main
-            printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:label=\"Worktrack\" android:hasCode=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
+            printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"Worktrack\" android:hasCode=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\" android:configChanges=\"orientation|screenSize\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n" > app/src/main/AndroidManifest.xml
           fi
 
+      # STEP 4: Inject Web Assets into Android
+      - name: Inject Built Assets
+        run: |
+          mkdir -p app/src/main/assets
+          # Adjust 'dist' to whatever your npm build folder is named (build, out, etc.)
+          cp -r dist/* app/src/main/assets/ || cp -r build/* app/src/main/assets/ || echo "No build folder found"
+
+      # STEP 5: Final Build
       - name: Build APK
         run: |
           gradle wrapper
