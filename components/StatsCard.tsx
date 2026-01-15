@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ChevronDown, Briefcase } from 'lucide-react';
+import { ShieldCheck, ChevronDown, Briefcase, Zap } from 'lucide-react';
 import { ShiftStats, AppSettings } from '../types';
 
 interface StatsCardProps {
@@ -33,21 +33,34 @@ export const StatsCard: React.FC<StatsCardProps> = ({ stats, settings }) => {
                  </div>
              </div>
 
-             {!is1099 ? (
-                 <>
-                    <button onClick={() => setExpandedEarnings(!expandedEarnings)} className="w-full flex items-center justify-between text-xs font-medium bg-indigo-800/30 hover:bg-indigo-800/50 p-3 rounded-xl transition-colors border border-indigo-500/30">
-                        <span>{expandedEarnings ? 'Hide Breakdown' : 'View Tax Breakdown'}</span>
-                        {expandedEarnings ? <ChevronDown className="rotate-180 transition-transform" size={14} /> : <ChevronDown size={14} className="transition-transform" />}
-                    </button>
-                    
-                    {expandedEarnings && (
-                        <div className="mt-3 space-y-2 text-sm text-indigo-100 border-t border-indigo-500/30 pt-3 animate-in fade-in slide-in-from-top-2">
-                            <div className="flex justify-between">
-                                <span>Gross Pay</span>
-                                <span>${stats.grossPay.toFixed(2)}</span>
+             <button onClick={() => setExpandedEarnings(!expandedEarnings)} className="w-full flex items-center justify-between text-xs font-medium bg-indigo-800/30 hover:bg-indigo-800/50 p-3 rounded-xl transition-colors border border-indigo-500/30">
+                <span>{expandedEarnings ? 'Hide Details' : 'View Pay Breakdown'}</span>
+                {expandedEarnings ? <ChevronDown className="rotate-180 transition-transform" size={14} /> : <ChevronDown size={14} className="transition-transform" />}
+            </button>
+            
+            {expandedEarnings && (
+                <div className="mt-3 space-y-3 text-sm text-indigo-100 border-t border-indigo-500/30 pt-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-1.5">
+                        <div className="flex justify-between">
+                            <span className="opacity-70">Regular ({stats.regularHours.toFixed(2)}h)</span>
+                            <span>${stats.regularPay.toFixed(2)}</span>
+                        </div>
+                        {stats.overtimeHours > 0 && (
+                            <div className="flex justify-between text-emerald-300 font-medium">
+                                <span className="flex items-center gap-1"><Zap size={12}/> Overtime ({stats.overtimeHours.toFixed(2)}h)</span>
+                                <span>+${stats.overtimePay.toFixed(2)}</span>
                             </div>
+                        )}
+                        <div className="flex justify-between font-bold border-t border-indigo-500/20 pt-1 mt-1 text-white">
+                            <span>Gross Pay</span>
+                            <span>${stats.grossPay.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    {!is1099 ? (
+                        <div className="space-y-1.5 pt-2 border-t border-indigo-500/20">
                             <div className="flex justify-between text-indigo-200">
-                                <span>Federal Tax</span>
+                                <span>Federal Income Tax</span>
                                 <span>-${stats.estimatedFederalTax.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-indigo-200">
@@ -56,22 +69,28 @@ export const StatsCard: React.FC<StatsCardProps> = ({ stats, settings }) => {
                             </div>
                             {settings.taxSettings.includeFica && (
                                 <div className="flex justify-between text-indigo-200">
-                                    <span>FICA (7.65%)</span>
+                                    <span>FICA (SocSec/Med)</span>
                                     <span>-${stats.estimatedFICA.toFixed(2)}</span>
                                 </div>
                             )}
-                            <div className="mt-2 pt-2 border-t border-indigo-500/30 flex justify-between text-xs opacity-70">
-                                <span>*Estimates based on weekly withholding logic</span>
-                            </div>
+                            {settings.taxSettings.additionalWithholding > 0 && (
+                                <div className="flex justify-between text-indigo-200">
+                                    <span>Extra Withholding</span>
+                                    <span>-${settings.taxSettings.additionalWithholding.toFixed(2)}</span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-2 bg-indigo-800/40 rounded-lg text-[10px] text-center text-indigo-200">
+                            1099 Contractor: You are responsible for all self-employment taxes.
                         </div>
                     )}
-                 </>
-             ) : (
-                <div className="w-full flex items-center justify-center gap-2 text-xs font-medium text-indigo-200 bg-indigo-800/20 p-2 rounded-lg border border-indigo-500/20">
-                     <Briefcase size={12} />
-                     1099 Contractor (No Withholding)
+                    
+                    <div className="pt-2 border-t border-indigo-500/30 flex justify-between text-[10px] opacity-50 italic">
+                        <span>*Projections based on 2026 tax tables</span>
+                    </div>
                 </div>
-             )}
+            )}
          </div>
     </div>
   );
